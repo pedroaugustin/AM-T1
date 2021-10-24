@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import pandas as pd
 from collections import Counter
@@ -22,9 +21,9 @@ def entropia_classe(data, classe, lista_valores_unicos):
     for valor in lista_valores_unicos: 
         # Número de linhas da classe que contem o valor único da classe
         num_linhas_classe = data[data[classe] == valor].shape[0] 
-        
+        entropia_total = - (num_linhas_classe/num_linhas)*np.log2(num_linhas_classe/num_linhas)
         # Entropia da classe
-        entropia_classe = entropia_classe - (num_linhas_classe/num_linhas)*np.log2(num_linhas_classe/num_linhas)  
+        entropia_classe += entropia_total 
     
     return entropia_classe
 
@@ -106,35 +105,48 @@ def maior_ganho(data, amostra, classe, lista_valores_unicos):
             
     return melhor_atributo, ganho_max
 
+# Retorna 1 se é uma classe pura e 0 se não é 
+# atributo_data: dataframe
+# classe: classe
+# lista_valores_unicos: lista de valores unicos da classe
 def mesma_classe(atributo_data, classe, lista_valores_unicos):
     if entropia_valor(atributo_data, classe, lista_valores_unicos) == 0:
         return 1
     return 0
 
+# Retorna a classe mais frequente 
+# data: dataframe
+# classe: classe
 def classe_mais_frequente(data, classe):
     return data[classe].value_counts().idxmax()
 
-def arvore_decisao(data, classe, lista_valores_unicos, num_atributos):
+# Cria a arvore de decisao
+# data: dataframe
+# classe: classe a ser predizida
+# lista_valores_unicos: lista de valores unicos da classe
+# num_atributos: numero de atributos da amostragem
+# valor_pai: valor do nodo pai
+def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai):
     nodo = Nodo()
 
-    amostra = get_amostra(data , classe, num_atributos)
-    atributo, ganho_max = maior_ganho(data, amostra, classe, lista_valores_unicos)
-
     if mesma_classe(data, classe, lista_valores_unicos):
-        nodo.atributo = data[classe].first
+        nodo.atributo = data[classe].iloc[0]
+        nodo.pai = valor_pai
         return nodo
 
     if data.empty:
-        nodo.atributo = 'sim' #classe_mais_frequente(data, classe)
+        nodo.atributo = classe_mais_frequente(data, classe)
+        nodo.pai = valor_pai
         return nodo
+    
+    amostra = get_amostra(data, classe, num_atributos)
+    atributo, ganho_max = maior_ganho(data, amostra, classe, lista_valores_unicos)
 
     nodo.atributo = atributo
     nodo.ganho = ganho_max
     nodo.filhos = []
 
     valores_unicos = data[atributo].unique()
-
-    data.drop(columns = atributo)
 
     if data[atributo].dtype.kind in 'biufc':
         criterio = data[atributo].mean()
@@ -150,29 +162,25 @@ def arvore_decisao(data, classe, lista_valores_unicos, num_atributos):
             nodo.filhos.append(novo_nodo)
     else:
         for valor in valores_unicos:
-            print(valor)
             nova_data = data[data[atributo] == valor]
-            if nova_data.empty:
-                novo_nodo = Nodo()
-                novo_nodo.atributo = classe_mais_frequente(data, classe)
-                novo_nodo.pai = valor
-            else:
-                novo_nodo = arvore_decisao(nova_data, classe, lista_valores_unicos, num_atributos)
-                novo_nodo.pai = valor
-                nodo.filhos.append(novo_nodo)
+
+            novo_nodo = arvore_decisao(nova_data, classe, lista_valores_unicos, num_atributos, valor)
+            novo_nodo.pai = valor
+            nodo.filhos.append(novo_nodo)
 
     return nodo
 
-# Impressão da árvore para debug
-def printTree(root):
+# Impressão da árvore
+def printTree(root,tab):
     if root:
         if root.pai:
-            print("----->  " + root.pai + " ---> " + root.atributo)
+            print(tab*"\t" + "----- " + root.pai + " --- " + root.atributo)
         else:
             print("-----  " + root.atributo + "  -----")
         if (root.filhos):
+            tab += 1
             for child in root.filhos:
-                printTree(child)
+                printTree(child,tab)
             print()
 
 
@@ -181,7 +189,7 @@ data = pd.read_csv('benchmark.csv', sep=';')
 class_list = data['Joga'].unique()
 num_atributos = 3
 entropy = ganho('Tempo', data, 'Joga', class_list)
-root = arvore_decisao(data, 'Joga', class_list, num_atributos)
+root = arvore_decisao(data, 'Joga', class_list, num_atributos, 'raiz')
 
-printTree(root)
+printTree(root,0)
 
