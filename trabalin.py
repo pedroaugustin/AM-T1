@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from collections import Counter
 
 class Nodo(object):
     def __init__(self):
@@ -129,16 +128,19 @@ def classe_mais_frequente(data, classe):
 def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai):
     nodo = Nodo()
 
+    # Se é uma classe pura retorna como nodo folha
     if mesma_classe(data, classe, lista_valores_unicos):
         nodo.atributo = data[classe].iloc[0]
         nodo.pai = valor_pai
         return nodo
 
+    # Se o dataframe for vazio retorna nodo folha com a classe mais frequente
     if data.empty:
         nodo.atributo = classe_mais_frequente(data, classe)
         nodo.pai = valor_pai
         return nodo
     
+    # Seleciona a partir de uma amostra m o atributo com maior ganho
     amostra = get_amostra(data, classe, num_atributos)
     atributo, ganho_max = maior_ganho(data, amostra, classe, lista_valores_unicos)
 
@@ -146,6 +148,7 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
     nodo.ganho = ganho_max
     nodo.filhos = []
 
+    # Busca os valores únicos do atributo
     valores_unicos = data[atributo].unique()
 
     if data[atributo].dtype.kind in 'biufc':
@@ -158,12 +161,12 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
                 atributo_data = maiores[maiores[atributo] == valor]
             elif valor <= criterio:
                 atributo_data = menores[menores[atributo] == valor]
-            novo_nodo = arvore_decisao(atributo_data, classe, lista_valores_unicos, num_atributos)
+            novo_nodo = arvore_decisao(atributo_data, classe, lista_valores_unicos, num_atributos, valor)
+            novo_nodo.pai = valor
             nodo.filhos.append(novo_nodo)
     else:
         for valor in valores_unicos:
             nova_data = data[data[atributo] == valor]
-
             novo_nodo = arvore_decisao(nova_data, classe, lista_valores_unicos, num_atributos, valor)
             novo_nodo.pai = valor
             nodo.filhos.append(novo_nodo)
@@ -174,9 +177,9 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
 def printTree(root,tab):
     if root:
         if root.pai:
-            print(tab*"\t" + "----- " + root.pai + " --- " + root.atributo)
+            print(tab*"\t" + "----- " + str(root.pai) + "--" + str(0 if (root.ganho is None) else round(root.ganho,2)) + " --- " + str(root.atributo))
         else:
-            print("-----  " + root.atributo + "  -----")
+            print("\t" + str(root.atributo))
         if (root.filhos):
             tab += 1
             for child in root.filhos:
@@ -184,12 +187,16 @@ def printTree(root,tab):
             print()
 
 
+# Dataset a ser analisado
 data = pd.read_csv('benchmark.csv', sep=';')
+#data = pd.read_csv('house-votes-84.tsv', sep='\t')
 
-class_list = data['Joga'].unique()
+# Classe preditiva
+classe = "Joga"
+
+# Número de atributos da amostragem
 num_atributos = 3
-entropy = ganho('Tempo', data, 'Joga', class_list)
-root = arvore_decisao(data, 'Joga', class_list, num_atributos, 'raiz')
 
+class_list = data[classe].unique()
+root = arvore_decisao(data, classe, class_list, num_atributos, 'raiz')
 printTree(root,0)
-
