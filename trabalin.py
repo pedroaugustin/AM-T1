@@ -249,6 +249,20 @@ def geraEnsemble(data, num_arvores, classe, class_list, num_atributos):
 
     return ensemble
 
+# Retorna lista de subgrupos de treinamento e teste para validação cruzada
+# dataframe: dataframe
+# kFold: numero de subgrupos
+def crossValidation(dataframe, kFold):
+    crossValidation = []
+    data = dataframe.sample(frac = 1)
+    length = len(data)
+    step = len(data) / kFold
+    for x in range(kFold):
+        first = int(x * step)
+        last = int(((x + 1) * step) - 1)
+        crossValidation.append(data[first:last])
+    return crossValidation
+
 # Dataset a ser analisado
 data = pd.read_csv('benchmark.csv', sep=';')
 classe = "Joga"
@@ -273,3 +287,10 @@ ensemble = geraEnsemble(data, num_arvores, classe, class_list, num_atributos)
 # printTree(root,0)
 # print(instance)
 # print(valor)
+
+print(data)
+print("\n - \n")
+x_ablau = crossValidation(data, 4)
+for x in range(len(x_ablau)):
+    print(x_ablau[x])
+    print("\n")
