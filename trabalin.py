@@ -1,6 +1,6 @@
+import random
 import numpy as np
 import pandas as pd
-import random
 
 class Nodo(object):
     def __init__(self):
@@ -11,8 +11,8 @@ class Nodo(object):
 
 # Retorna a entropia da classe (info)
 # data: dataframe
-# classe: nome da classe
-# lista_valores_unicos: lista com os valores unicos da classe
+# classe: nome da classe preditiva
+# lista_valores_unicos: lista com os valores unicos da classe preditiva
 def entropia_classe(data, classe, lista_valores_unicos):
     entropia_classe = 0
     num_linhas = data.shape[0]
@@ -29,8 +29,8 @@ def entropia_classe(data, classe, lista_valores_unicos):
 
 # Retorna a entropia de um atributo (infoA)
 # atributo_data: dataframe com os valores únicos de um atributo
-# classe: nome da classe
-# lista_valores_unicos: lista com os valores únicos da classe
+# classe: nome da classe preditiva
+# lista_valores_unicos: lista com os valores únicos da classe preditiva
 def entropia_valor(atributo_data, classe, lista_valores_unicos):
     entropia = 0
     num_linhas = atributo_data.shape[0]
@@ -54,8 +54,8 @@ def entropia_valor(atributo_data, classe, lista_valores_unicos):
 # Retorna o ganho de informação de um atributo
 # atributo: nome do atributo que queremos o ganho de informação
 # data: dataframe 
-# classe: nome da classe
-# lista_valores_unicos: lista com os valores únicos da classe
+# classe: nome da classe preditiva
+# lista_valores_unicos: lista com os valores únicos da classe preditiva
 def ganho(atributo, data, classe, lista_valores_unicos):
     num_linhas = data.shape[0]
     info_atributo = 0.0
@@ -192,7 +192,7 @@ def printTree(root,tab):
             print()
 
 # Classifica uma instancia
-# instance: row com uma instancia a ser classificada
+# instane: row com uma instancia a ser classificada
 # lista_atributos: lista de atributos sem a classe preditiva
 # nodo: nodo raiz
 def classify(instance, lista_atributos, nodo):
@@ -229,14 +229,25 @@ def classify(instance, lista_atributos, nodo):
     return resultado
 
 # Retorna subconjunto de dataFrame a partir de bagging
-# dataSet: todo o conuunto de dados
-def bagging(dataSet):
-    length = len(dataSet)
+# data: dataframe
+def bootstrap(data):
+    length = len(data)
     delete = int(length * (1 - 0.632))
     deleteList = random.sample(range(length), delete)
     dataSet = data.drop(labels = deleteList)
     dataSet = dataSet.sample(n = length, replace = True)
     return dataSet
+
+# Retorna um ensemble de árvores
+def geraEnsemble(data, num_arvores, classe, class_list, num_atributos):
+    ensemble = []
+
+    for x in range(0,num_arvores):
+        dataset = bootstrap(data)
+        tree = arvore_decisao(dataset, classe, class_list, num_atributos, 'raiz')
+        ensemble.append(tree)
+
+    return ensemble
 
 # Dataset a ser analisado
 data = pd.read_csv('benchmark.csv', sep=';')
@@ -245,9 +256,11 @@ classe = "Joga"
 # data = pd.read_csv('house-votes-84.tsv', sep='\t')
 # classe = "target"
 
-
 # Número de atributos da amostragem
 num_atributos = 3
+
+# Número de arvores no ensemble
+num_arvores = 4
 
 class_list = data[classe].unique()
 lista_atributos = data.drop(columns = classe)
@@ -255,9 +268,8 @@ instance = lista_atributos.sample()
 
 root = arvore_decisao(data, classe, class_list, num_atributos, 'raiz')
 valor = classify(instance, lista_atributos, root)
+ensemble = geraEnsemble(data, num_arvores, classe, class_list, num_atributos)
 
-printTree(root,0)
-print(instance)
-print(valor)
-
-bagging(data)
+# printTree(root,0)
+# print(instance)
+# print(valor)
