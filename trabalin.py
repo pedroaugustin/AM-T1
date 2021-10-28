@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import random
 
 class Nodo(object):
     def __init__(self):
@@ -191,7 +192,7 @@ def printTree(root,tab):
             print()
 
 # Classifica uma instancia
-# instane: row com uma instancia a ser classificada
+# instance: row com uma instancia a ser classificada
 # lista_atributos: lista de atributos sem a classe preditiva
 # nodo: nodo raiz
 def classify(instance, lista_atributos, nodo):
@@ -227,12 +228,23 @@ def classify(instance, lista_atributos, nodo):
 
     return resultado
 
+# Retorna subconjunto de dataFrame a partir de bagging
+# dataSet: todo o conuunto de dados
+def bagging(dataSet):
+    length = len(dataSet)
+    delete = int(length * (1 - 0.632))
+    deleteList = random.sample(range(length), delete)
+    dataSet = data.drop(labels = deleteList)
+    dataSet = dataSet.sample(n = length, replace = True)
+    return dataSet
+
 # Dataset a ser analisado
 data = pd.read_csv('benchmark.csv', sep=';')
 classe = "Joga"
 
 # data = pd.read_csv('house-votes-84.tsv', sep='\t')
 # classe = "target"
+
 
 # Número de atributos da amostragem
 num_atributos = 3
@@ -247,3 +259,5 @@ valor = classify(instance, lista_atributos, root)
 printTree(root,0)
 print(instance)
 print(valor)
+
+bagging(data)
