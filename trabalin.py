@@ -162,7 +162,11 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
             elif valor <= criterio:
                 atributo_data = menores[menores[atributo] == valor]
             novo_nodo = arvore_decisao(atributo_data, classe, lista_valores_unicos, num_atributos, valor)
-            novo_nodo.pai = valor
+            if valor > criterio:
+                novo_nodo.pai = "> " + str(criterio)
+            elif valor <= criterio:
+                novo_nodo.pai = "<= " + str(criterio)
+            
             nodo.filhos.append(novo_nodo)
     else:
         for valor in valores_unicos:
@@ -177,7 +181,7 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
 def printTree(root,tab):
     if root:
         if root.pai:
-            print(tab*"\t" + "----- " + str(root.pai) + "--" + str(0 if (root.ganho is None) else round(root.ganho,2)) + " --- " + str(root.atributo))
+            print(tab*"\t" + "----- " + str(root.pai) + " (ganho: " + str(0 if (root.ganho is None) else round(root.ganho,2)) + ") --- " + str(root.atributo))
         else:
             print("\t" + str(root.atributo))
         if (root.filhos):
@@ -186,17 +190,60 @@ def printTree(root,tab):
                 printTree(child,tab)
             print()
 
+# Classifica uma instancia
+# instane: row com uma instancia a ser classificada
+# lista_atributos: lista de atributos sem a classe preditiva
+# nodo: nodo raiz
+def classify(instance, lista_atributos, nodo):
+    resultado = None
+    if nodo:
+        if not nodo.filhos:
+            return nodo.atributo
+
+        # Se o atributo é do tipo numérico
+        if instance[nodo.atributo].dtype.kind in 'biufc':
+            for filho in nodo.filhos:
+                if "<=" in filho.pai:
+                    valor = float(filho.pai.replace("<= ", ""))
+                    if float(instance.iloc[0][nodo.atributo]) <= valor:
+                        if not filho.filhos:
+                            return filho.atributo
+                        else:
+                            resultado = classify(instance, lista_atributos, filho)
+                else:
+                    valor = float(filho.pai.replace("> ", ""))
+                    if float(instance.iloc[0][nodo.atributo]) > valor:
+                        if not filho.filhos:
+                            return filho.atributo
+                        else:
+                            resultado = classify(instance, lista_atributos, filho)
+        else:
+            for filho in nodo.filhos:
+                if filho.pai == instance.iloc[0][nodo.atributo]:
+                    if not filho.filhos:
+                        return filho.atributo
+                    else:
+                        resultado=classify(instance, lista_atributos, filho)
+
+    return resultado
 
 # Dataset a ser analisado
 data = pd.read_csv('benchmark.csv', sep=';')
-#data = pd.read_csv('house-votes-84.tsv', sep='\t')
-
-# Classe preditiva
 classe = "Joga"
+
+# data = pd.read_csv('house-votes-84.tsv', sep='\t')
+# classe = "target"
 
 # Número de atributos da amostragem
 num_atributos = 3
 
 class_list = data[classe].unique()
+lista_atributos = data.drop(columns = classe)
+instance = lista_atributos.sample()
+
 root = arvore_decisao(data, classe, class_list, num_atributos, 'raiz')
+valor = classify(instance, lista_atributos, root)
+
 printTree(root,0)
+print(instance)
+print(valor)
