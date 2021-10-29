@@ -20,10 +20,10 @@ def entropia_classe(data, classe, lista_valores_unicos):
     # Para cada valor único da classe 
     for valor in lista_valores_unicos: 
         # Número de linhas da classe que contem o valor único da classe
-        num_linhas_classe = data[data[classe] == valor].shape[0] 
+        num_linhas_classe = data[data[classe] == valor].shape[0]
         entropia_total = - (num_linhas_classe/num_linhas)*np.log2(num_linhas_classe/num_linhas)
         # Entropia da classe
-        entropia_classe += entropia_total 
+        entropia_classe += entropia_total
     
     return entropia_classe
 
@@ -154,15 +154,12 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
 
     if data[atributo].dtype.kind in 'biufc':
         criterio = data[atributo].mean()
-        maiores = data[data[atributo] > criterio]
-        menores = data[data[atributo] <= criterio]
         for valor in valores_unicos:
             # Linhas que tem o mesmo valor do valor único do atributo
-            if valor > criterio:
-                atributo_data = maiores[maiores[atributo] == valor]
-            elif valor <= criterio:
-                atributo_data = menores[menores[atributo] == valor]
-            novo_nodo = arvore_decisao(atributo_data, classe, lista_valores_unicos, num_atributos, valor)
+            valores = data[data[atributo] == valor]
+            lista_valores_unicos = valores[classe].unique()
+            valores = valores.reset_index(drop=True)
+            novo_nodo = arvore_decisao(valores, classe, lista_valores_unicos, num_atributos, valor)
             if valor > criterio:
                 novo_nodo.pai = "> " + str(criterio)
             elif valor <= criterio:
@@ -195,7 +192,7 @@ def printTree(root,tab):
 # instane: row com uma instancia a ser classificada
 # lista_atributos: lista de atributos sem a classe preditiva
 # nodo: nodo raiz
-def classify(instance, lista_atributos, nodo):
+def classify(instance, nodo):
     resultado = None
     if nodo:
         if not nodo.filhos:
@@ -210,21 +207,21 @@ def classify(instance, lista_atributos, nodo):
                         if not filho.filhos:
                             return filho.atributo
                         else:
-                            resultado = classify(instance, lista_atributos, filho)
+                            resultado = classify(instance, filho)
                 else:
                     valor = float(filho.pai.replace("> ", ""))
                     if float(instance.iloc[0][nodo.atributo]) > valor:
                         if not filho.filhos:
                             return filho.atributo
                         else:
-                            resultado = classify(instance, lista_atributos, filho)
+                            resultado = classify(instance, filho)
         else:
             for filho in nodo.filhos:
                 if filho.pai == instance.iloc[0][nodo.atributo]:
                     if not filho.filhos:
                         return filho.atributo
                     else:
-                        resultado=classify(instance, lista_atributos, filho)
+                        resultado = classify(instance, filho)
 
     return resultado
 
@@ -239,12 +236,13 @@ def bootstrap(data):
     return dataSet
 
 # Retorna um ensemble de árvores
-def geraEnsemble(data, num_arvores, classe, class_list, num_atributos):
+def geraEnsemble(data, num_arvores, classe, lista_valores_unicos, num_atributos):
     ensemble = []
 
     for x in range(0,num_arvores):
         dataset = bootstrap(data)
-        tree = arvore_decisao(dataset, classe, class_list, num_atributos, 'raiz')
+        lista_valores_unicos = dataset[classe].unique()
+        tree = arvore_decisao(dataset, classe, lista_valores_unicos, num_atributos, 'raiz')
         ensemble.append(tree)
 
     return ensemble
@@ -252,16 +250,39 @@ def geraEnsemble(data, num_arvores, classe, class_list, num_atributos):
 # Retorna lista de subgrupos de treinamento e teste para validação cruzada
 # dataframe: dataframe
 # kFold: numero de subgrupos
-def crossValidation(dataframe, kFold):
+def crossValidation(data, kFold):
     crossValidation = []
-    data = dataframe.sample(frac = 1)
-    length = len(data)
-    step = len(data) / kFold
+    dataframe = data.sample(frac = 1)
+    step = len(dataframe) / kFold
     for x in range(kFold):
         first = int(x * step)
         last = int(((x + 1) * step) - 1)
-        crossValidation.append(data[first:last])
+        crossValidation.append(dataframe[first:last].reset_index(drop=True))
     return crossValidation
+
+def valida(data, num_atributos, num_arvores, classe, lista_valores_unicos, k_folds):
+    corretos = 0
+    errados = 0
+    predicoes = []
+    dados = crossValidation(data, k_folds)
+    for x in range(len(dados)):
+        nodos = geraEnsemble(dados[x], num_arvores, classe, lista_valores_unicos, num_atributos)
+        for index, linha in dados[x].iterrows():
+            original = linha[classe]
+            instance = dados[x].loc[[index]]
+            for nodo in nodos:
+                resultado = classify(instance, nodo)
+                predicoes.append(resultado)
+            predito = max(set(predicoes), key=predicoes.count) 
+            if predito == original:
+                corretos += 1
+            else:
+                errados += 1
+    
+    print("Total: " + str(corretos + errados))
+    print("Corretos: " + str(corretos) + " ou " + "{:.2f}".format( (corretos/(corretos+errados)) * 100 ) + " %")
+    print("Errados: " + str(errados) + " ou " + "{:.2f}".format( (errados/(corretos+errados)) * 100 ) + " %")
+
 
 # Dataset a ser analisado
 data = pd.read_csv('benchmark.csv', sep=';')
@@ -270,27 +291,30 @@ classe = "Joga"
 # data = pd.read_csv('house-votes-84.tsv', sep='\t')
 # classe = "target"
 
+# data = pd.read_csv('wine-recognition.tsv', sep='\t')
+# classe = "target"
+
 # Número de atributos da amostragem
 num_atributos = 3
 
 # Número de arvores no ensemble
-num_arvores = 4
+num_arvores = 10
 
-class_list = data[classe].unique()
-lista_atributos = data.drop(columns = classe)
-instance = lista_atributos.sample()
+# Número de folds
+k_folds = 2
+lista_valores_unicos = data[classe].unique()
 
-root = arvore_decisao(data, classe, class_list, num_atributos, 'raiz')
-valor = classify(instance, lista_atributos, root)
-ensemble = geraEnsemble(data, num_arvores, classe, class_list, num_atributos)
+# root = arvore_decisao(data, classe, lista_valores_unicos, num_atributos, 'raiz')
+# ensemble = geraEnsemble(data, num_arvores, classe, lista_valores_unicos, num_atributos)
 
+valida(data, num_atributos, num_arvores, classe, lista_valores_unicos, k_folds)
 # printTree(root,0)
 # print(instance)
 # print(valor)
 
-print(data)
-print("\n - \n")
-x_ablau = crossValidation(data, 4)
-for x in range(len(x_ablau)):
-    print(x_ablau[x])
-    print("\n")
+# print(data)
+# print("\n - \n")
+# x_ablau = crossValidation(data, 4)
+# for x in range(len(x_ablau)):
+#     print(x_ablau[x])
+#     print("\n")
