@@ -1,6 +1,8 @@
-import random
 import numpy as np
 import pandas as pd
+import math
+import copy
+import time
 
 class Nodo(object):
     def __init__(self):
@@ -85,7 +87,7 @@ def ganho(atributo, data, classe, lista_valores_unicos):
 # num_atributos: numero de atributos a serem selecionados
 def get_amostra(data, classe, num_atributos):
     lista_atributos = data.drop(columns = classe)
-    amostra = lista_atributos.sample(n=num_atributos,axis='columns')
+    amostra = lista_atributos.columns.values.tolist()
 
     return amostra
 
@@ -96,13 +98,13 @@ def get_amostra(data, classe, num_atributos):
 def maior_ganho(data, amostra, classe, lista_valores_unicos):
     melhor_atributo = None
     ganho_max = -1
-      
-    for atributo in amostra:  
+
+    for atributo in amostra:
         ganho_atributo = ganho(atributo, data, classe, lista_valores_unicos)
         if ganho_max < ganho_atributo: 
             ganho_max = ganho_atributo
             melhor_atributo = atributo
-            
+
     return melhor_atributo, ganho_max
 
 # Retorna 1 se é uma classe pura e 0 se não é 
@@ -154,18 +156,23 @@ def arvore_decisao(data,  classe, lista_valores_unicos, num_atributos, valor_pai
 
     if data[atributo].dtype.kind in 'biufc':
         criterio = data[atributo].mean()
+        maiores = data[data[atributo] > criterio]
+        menores = data[data[atributo] <= criterio]
+
+        valores_unicos = ["<= "+str(criterio) , "> "+str(criterio)]
         for valor in valores_unicos:
-            # Linhas que tem o mesmo valor do valor único do atributo
-            valores = data[data[atributo] == valor]
-            lista_valores_unicos = valores[classe].unique()
-            valores = valores.reset_index(drop=True)
-            novo_nodo = arvore_decisao(valores, classe, lista_valores_unicos, num_atributos, valor)
-            if valor > criterio:
-                novo_nodo.pai = "> " + str(criterio)
-            elif valor <= criterio:
-                novo_nodo.pai = "<= " + str(criterio)
+            if (valor[0] == "<"):
+                lista_valores_unicos = menores[classe].unique()
+                menores = menores.reset_index(drop=True)
+                novo_nodo = arvore_decisao(menores, classe, lista_valores_unicos, num_atributos, valor)
+            else:
+                lista_valores_unicos = maiores[classe].unique()
+                maiores = maiores.reset_index(drop=True)
+                novo_nodo = arvore_decisao(maiores, classe, lista_valores_unicos, num_atributos, valor)
             
+            novo_nodo.pai = valor
             nodo.filhos.append(novo_nodo)
+
     else:
         for valor in valores_unicos:
             nova_data = data[data[atributo] == valor]
@@ -228,12 +235,12 @@ def classify(instance, nodo):
 # Retorna subconjunto de dataFrame a partir de bagging
 # data: dataframe
 def bootstrap(data):
+    dataset = data.copy(deep=True)
     length = len(data)
-    delete = int(length * (1 - 0.632))
-    deleteList = random.sample(range(length), delete)
-    dataSet = data.drop(labels = deleteList)
-    dataSet = dataSet.sample(n = length, replace = True)
-    return dataSet
+    tamanho = round(length * 0.632)
+    randlist = data.sample(n = tamanho)
+    #dataset.merge(randlist, left_index=True, right_index=True, how='right')
+    return randlist
 
 # Retorna um ensemble de árvores
 def geraEnsemble(data, num_arvores, classe, lista_valores_unicos, num_atributos):
@@ -266,10 +273,15 @@ def valida(data, num_atributos, num_arvores, classe, lista_valores_unicos, k_fol
     predicoes = []
     dados = crossValidation(data, k_folds)
     for x in range(len(dados)):
-        nodos = geraEnsemble(dados[x], num_arvores, classe, lista_valores_unicos, num_atributos)
-        for index, linha in dados[x].iterrows():
+        dados_copia = copy.deepcopy(dados)
+        teste = dados_copia.pop(x)
+        treino = pd.concat(dados_copia)
+
+        nodos = geraEnsemble(treino, num_arvores, classe, lista_valores_unicos, num_atributos)
+
+        for index, linha in teste.iterrows():
             original = linha[classe]
-            instance = dados[x].loc[[index]]
+            instance = teste.loc[[index]]
             for nodo in nodos:
                 resultado = classify(instance, nodo)
                 predicoes.append(resultado)
@@ -294,27 +306,23 @@ classe = "Joga"
 # data = pd.read_csv('wine-recognition.tsv', sep='\t')
 # classe = "target"
 
-# Número de atributos da amostragem
-num_atributos = 3
-
-# Número de arvores no ensemble
-num_arvores = 10
-
-# Número de folds
-k_folds = 2
 lista_valores_unicos = data[classe].unique()
 
+# Número de atributos da amostragem = raiz quadrada do numero de colunas
+num_atributos = round(math.sqrt(data.shape[1]))
+
+# Número de arvores no ensemble
+num_arvores = [1,10,25,50]
+
+# Número de folds
+k_folds = 10
+
+start = time.time()
+for numero in num_arvores:
+    valida(data, num_atributos, numero, classe, lista_valores_unicos, k_folds)
+end = time.time()
+print(end - start)
+
 # root = arvore_decisao(data, classe, lista_valores_unicos, num_atributos, 'raiz')
-# ensemble = geraEnsemble(data, num_arvores, classe, lista_valores_unicos, num_atributos)
-
-valida(data, num_atributos, num_arvores, classe, lista_valores_unicos, k_folds)
 # printTree(root,0)
-# print(instance)
-# print(valor)
 
-# print(data)
-# print("\n - \n")
-# x_ablau = crossValidation(data, 4)
-# for x in range(len(x_ablau)):
-#     print(x_ablau[x])
-#     print("\n")
